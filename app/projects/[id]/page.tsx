@@ -415,14 +415,23 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
                       生成日: {new Date(project.script.generatedAt).toLocaleString('ja-JP')}
                     </p>
                   </div>
-                  <button
-                    onClick={handleGenerateScript}
-                    disabled={generating}
-                    className="px-4 py-2 text-xs font-medium text-white rounded-lg hover:opacity-90 disabled:opacity-50"
-                    style={{ background: 'var(--accent)' }}
-                  >
-                    {generating ? '生成中...' : '🔄 再生成'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => window.open(`/projects/${id}/print?mode=script`, '_blank')}
+                      className="px-4 py-2 text-xs font-medium rounded-lg border transition-all hover:opacity-80"
+                      style={{ borderColor: 'var(--border)', color: 'var(--primary)' }}
+                    >
+                      PDF保存
+                    </button>
+                    <button
+                      onClick={handleGenerateScript}
+                      disabled={generating}
+                      className="px-4 py-2 text-xs font-medium text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+                      style={{ background: 'var(--accent)' }}
+                    >
+                      {generating ? '生成中...' : '🔄 再生成'}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Timeline */}
@@ -720,6 +729,15 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
                           >
                             動画を見る
                           </a>
+                        )}
+                        {session.feedback && (
+                          <button
+                            onClick={() => window.open(`/projects/${id}/print?mode=analysis&session=${session.id}`, '_blank')}
+                            className="text-xs px-2 py-1 rounded-lg border transition-all hover:opacity-80"
+                            style={{ borderColor: 'var(--border)', color: 'var(--primary)' }}
+                          >
+                            PDF保存
+                          </button>
                         )}
                         <button
                           onClick={() => handleAnalyzeSession(session.id)}
