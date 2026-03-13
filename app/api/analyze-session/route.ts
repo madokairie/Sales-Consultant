@@ -86,7 +86,8 @@ D. 決断を委ねている（「ご検討ください」で終了）→ -10点
       "point": "改善点のタイトル",
       "detail": "具体的にどう改善すべきか",
       "timestamp": "該当する発言の引用",
-      "severity": "high"
+      "severity": "high",
+      "actionScript": "次回そのまま使える具体的なセリフ例（「」付きで2-3パターン）。例：「○○さんは、もしこの状況があと1年続いたら、どうなりそうですか？」"
     }
   ],
   "missedOpportunities": [
@@ -94,7 +95,8 @@ D. 決断を委ねている（「ご検討ください」で終了）→ -10点
       "point": "見逃した機会のタイトル",
       "detail": "ここでこう言えば成約率が上がった",
       "timestamp": "該当する発言の引用",
-      "severity": "medium"
+      "severity": "medium",
+      "actionScript": "この場面で使うべきだった具体的なセリフ例（「」付き）"
     }
   ],
   "phaseAnalysis": [

@@ -111,6 +111,7 @@ export interface FeedbackItem {
   detail: string;
   timestamp?: string;        // 該当箇所の目安
   severity: 'high' | 'medium' | 'low';
+  actionScript?: string;     // 次回使える具体的なセリフ例
 }
 
 export interface PhaseAnalysis {

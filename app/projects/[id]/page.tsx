@@ -31,6 +31,9 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [generating, setGenerating] = useState(false);
   const [analyzing, setAnalyzing] = useState<string | null>(null);
+  const [configMode, setConfigMode] = useState<'fields' | 'text'>('fields');
+  const [bulkText, setBulkText] = useState('');
+  const [parsingBulk, setParsingBulk] = useState(false);
 
   // Session form
   const [showSessionForm, setShowSessionForm] = useState(false);
@@ -49,6 +52,36 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
   }, [id, router]);
 
   if (!project) return null;
+
+  // ===== Parse bulk text =====
+  const handleParseBulk = async () => {
+    if (!bulkText.trim()) return;
+    setParsingBulk(true);
+    try {
+      const res = await fetch('/api/parse-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: bulkText }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '解析に失敗しました');
+      const updated = updateProject(id, {
+        config: {
+          ...project.config,
+          ...Object.fromEntries(
+            Object.entries(data).filter(([, v]) => typeof v === 'string' && (v as string).trim())
+          ),
+        },
+      });
+      if (updated) setProject(updated);
+      setConfigMode('fields');
+      setBulkText('');
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '解析に失敗しました');
+    } finally {
+      setParsingBulk(false);
+    }
+  };
 
   // ===== Config helpers =====
   const updateConfig = (field: keyof ConsultationConfig, value: string) => {
@@ -242,7 +275,64 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
               </button>
             </div>
 
-            {configFields.map(field => (
+            {/* Input mode toggle */}
+            <div className="flex items-center gap-2 p-1 rounded-lg" style={{ background: 'var(--background)' }}>
+              <button
+                onClick={() => setConfigMode('fields')}
+                className="flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all"
+                style={{
+                  background: configMode === 'fields' ? 'var(--card)' : 'transparent',
+                  color: configMode === 'fields' ? 'var(--primary)' : 'var(--muted)',
+                  boxShadow: configMode === 'fields' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                }}
+              >
+                項目ごとに入力
+              </button>
+              <button
+                onClick={() => setConfigMode('text')}
+                className="flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all"
+                style={{
+                  background: configMode === 'text' ? 'var(--card)' : 'transparent',
+                  color: configMode === 'text' ? 'var(--primary)' : 'var(--muted)',
+                  boxShadow: configMode === 'text' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                }}
+              >
+                テキストから一括入力
+              </button>
+            </div>
+
+            {/* Bulk text input mode */}
+            {configMode === 'text' && (
+              <div className="border rounded-xl p-5" style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
+                <p className="text-xs mb-3" style={{ color: 'var(--muted)' }}>
+                  セールスページのテキスト、商品説明文、LPの内容などを貼り付けてください。AIが商品情報を自動で抽出します。
+                </p>
+                <textarea
+                  value={bulkText}
+                  onChange={e => setBulkText(e.target.value)}
+                  placeholder={'セールスページやLPのテキストをここに貼り付け...\n\n例：\n【商品名】ビジネスコーチングプログラム\n【価格】498,000円（税込）\n6ヶ月間のマンツーマンコーチング...\n\nまたはセールスページのテキストをそのままコピー＆ペーストしてください。'}
+                  rows={12}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2"
+                  style={{ borderColor: 'var(--border)' }}
+                />
+                <div className="flex items-center justify-between mt-3">
+                  <span className="text-[10px]" style={{ color: 'var(--muted)' }}>
+                    {bulkText.length > 0 ? `${bulkText.length}文字` : ''}
+                  </span>
+                  <button
+                    onClick={handleParseBulk}
+                    disabled={parsingBulk || bulkText.trim().length < 20}
+                    className="px-5 py-2.5 text-sm font-medium text-white rounded-lg transition-all hover:opacity-90 disabled:opacity-50"
+                    style={{ background: 'var(--primary)' }}
+                  >
+                    {parsingBulk ? 'AIが解析中...' : 'AIで情報を抽出'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Field-by-field input mode */}
+            {configMode === 'fields' && configFields.map(field => (
               <div key={field.key}>
                 <label className="text-xs font-medium block mb-1" style={{ color: 'var(--primary)' }}>
                   {field.label}
@@ -744,6 +834,14 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
                                   </div>
                                   <p className="text-xs text-orange-600 mt-1">{item.detail}</p>
                                   {item.timestamp && <p className="text-[10px] text-orange-400 mt-1">「{item.timestamp}」</p>}
+                                  {item.actionScript && (
+                                    <div className="mt-2 p-2.5 rounded-lg border" style={{ background: '#FFF', borderColor: '#FBBF24' }}>
+                                      <p className="text-[10px] font-bold mb-1" style={{ color: '#92400E' }}>次回使えるセリフ例</p>
+                                      <p className="text-xs whitespace-pre-wrap" style={{ color: '#78350F' }}>
+                                        {item.actionScript}
+                                      </p>
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -760,6 +858,14 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
                                   <p className="text-xs font-medium text-purple-700">{item.point}</p>
                                   <p className="text-xs text-purple-600 mt-0.5">{item.detail}</p>
                                   {item.timestamp && <p className="text-[10px] text-purple-400 mt-1">「{item.timestamp}」</p>}
+                                  {item.actionScript && (
+                                    <div className="mt-2 p-2.5 rounded-lg border" style={{ background: '#FFF', borderColor: '#C084FC' }}>
+                                      <p className="text-[10px] font-bold mb-1" style={{ color: '#6B21A8' }}>こう言えばよかった</p>
+                                      <p className="text-xs whitespace-pre-wrap" style={{ color: '#581C87' }}>
+                                        {item.actionScript}
+                                      </p>
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
