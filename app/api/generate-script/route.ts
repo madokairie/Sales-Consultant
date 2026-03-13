@@ -159,6 +159,7 @@ NOと言われたら、追わない。押さない。丁寧にお見送り。
     return NextResponse.json(parsed);
   } catch (error) {
     console.error('Generate script API error:', error);
-    return NextResponse.json({ error: 'スクリプト生成に失敗しました' }, { status: 500 });
+    const message = error instanceof Error ? error.message : '不明なエラー';
+    return NextResponse.json({ error: `スクリプト生成に失敗しました: ${message}` }, { status: 500 });
   }
 }

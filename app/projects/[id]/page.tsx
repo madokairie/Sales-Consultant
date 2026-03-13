@@ -34,6 +34,7 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
 
   // Session form
   const [showSessionForm, setShowSessionForm] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [sessionForm, setSessionForm] = useState({
     clientName: '',
     result: 'pending' as 'closed' | 'lost' | 'pending',
@@ -66,18 +67,41 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ config: project.config }),
       });
-      if (!res.ok) throw new Error('Failed');
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
       const updated = updateProject(id, {
         script: { generatedAt: new Date().toISOString(), phases: data.phases },
       });
       if (updated) setProject(updated);
       setActiveTab('script');
     } catch (e) {
-      alert('スクリプト生成に失敗しました。もう一度お試しください。');
+      alert(e instanceof Error ? e.message : 'スクリプト生成に失敗しました。もう一度お試しください。');
       console.error(e);
     } finally {
       setGenerating(false);
+    }
+  };
+
+  // ===== Transcribe from video URL =====
+  const handleTranscribe = async () => {
+    if (!sessionForm.videoUrl.trim()) {
+      alert('動画URLを入力してください');
+      return;
+    }
+    setTranscribing(true);
+    try {
+      const res = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: sessionForm.videoUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '文字起こしに失敗しました');
+      setSessionForm(f => ({ ...f, transcript: data.transcript }));
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '文字起こしに失敗しました');
+    } finally {
+      setTranscribing(false);
     }
   };
 
@@ -123,15 +147,15 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
           scriptPhases,
         }),
       });
-      if (!res.ok) throw new Error('Failed');
-      const feedback: SessionFeedback = await res.json();
+      const feedback = await res.json();
+      if (!res.ok) throw new Error(feedback.error || 'Failed');
       const updatedSessions = project.sessions.map(s =>
-        s.id === sessionId ? { ...s, feedback } : s
+        s.id === sessionId ? { ...s, feedback: feedback as SessionFeedback } : s
       );
       const updated = updateProject(id, { sessions: updatedSessions });
       if (updated) setProject(updated);
     } catch (e) {
-      alert('分析に失敗しました。もう一度お試しください。');
+      alert(e instanceof Error ? e.message : '分析に失敗しました。もう一度お試しください。');
       console.error(e);
     } finally {
       setAnalyzing(null);
@@ -474,15 +498,28 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs font-medium block mb-1">動画URL（任意）</label>
-                    <input
-                      type="text"
-                      value={sessionForm.videoUrl}
-                      onChange={e => setSessionForm(f => ({ ...f, videoUrl: e.target.value }))}
-                      placeholder="例：https://zoom.us/rec/... や YouTube URL"
-                      className="w-full px-3 py-2 border rounded-lg text-sm"
-                      style={{ borderColor: 'var(--border)' }}
-                    />
+                    <label className="text-xs font-medium block mb-1">動画URL</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={sessionForm.videoUrl}
+                        onChange={e => setSessionForm(f => ({ ...f, videoUrl: e.target.value }))}
+                        placeholder="YouTube URLを入力（例：https://youtube.com/watch?v=...）"
+                        className="flex-1 px-3 py-2 border rounded-lg text-sm"
+                        style={{ borderColor: 'var(--border)' }}
+                      />
+                      <button
+                        onClick={handleTranscribe}
+                        disabled={transcribing || !sessionForm.videoUrl.trim()}
+                        className="px-4 py-2 text-xs font-medium text-white rounded-lg whitespace-nowrap disabled:opacity-50 transition-all hover:opacity-90"
+                        style={{ background: 'var(--primary)' }}
+                      >
+                        {transcribing ? '取得中...' : '字幕を取得'}
+                      </button>
+                    </div>
+                    <p className="text-[10px] mt-1" style={{ color: 'var(--muted)' }}>
+                      YouTube動画のURLから字幕を自動取得できます
+                    </p>
                   </div>
                   <div>
                     <label className="text-xs font-medium block mb-1">

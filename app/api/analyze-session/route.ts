@@ -176,6 +176,7 @@ ${result === 'pending' ? '【保留分析】「後で検討」になった原因
     return NextResponse.json(parsed);
   } catch (error) {
     console.error('Analyze session API error:', error);
-    return NextResponse.json({ error: '商談分析に失敗しました' }, { status: 500 });
+    const message = error instanceof Error ? error.message : '不明なエラー';
+    return NextResponse.json({ error: `商談分析に失敗しました: ${message}` }, { status: 500 });
   }
 }
