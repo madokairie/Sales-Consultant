@@ -42,6 +42,8 @@ export function createProject(name: string): ConsultationProject {
       differentiators: '',
       commonObjections: '',
       closingConditions: '',
+      preEducationLevel: 'partial',
+      preEducationDetail: '',
       goalType: 'direct_sale',
       goalDescription: '',
     },

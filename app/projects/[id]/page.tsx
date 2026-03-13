@@ -217,6 +217,12 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
     { key: 'differentiators', label: '差別化ポイント', placeholder: '例：実績1000名以上、独自メソッド、返金保証', type: 'textarea' },
     { key: 'commonObjections', label: 'よくある断り文句', placeholder: '例：高い、時間がない、自分にできるか不安、家族に相談したい', type: 'textarea' },
     { key: 'closingConditions', label: '成約条件', placeholder: '例：その場で決済、3日以内の振込', type: 'textarea' },
+    { key: 'preEducationLevel', label: '事前教育レベル', placeholder: '', options: [
+      { value: 'full', label: 'セミナーや動画で教育済み（価格まで公開）' },
+      { value: 'partial', label: 'セミナーや動画で説明済み（価格は未公開）' },
+      { value: 'none', label: '事前説明なし（面談が初接触）' },
+    ] },
+    { key: 'preEducationDetail', label: '事前に伝えている内容', placeholder: '例：3時間のセミナーで実績・メソッド・受講生の声まで紹介済み。価格はセミナー内で公開。', type: 'textarea' },
     { key: 'goalType', label: 'ゴール', placeholder: '', options: [{ value: 'direct_sale', label: 'その場で成約' }, { value: 'next_step', label: '次のステップへ誘導' }, { value: 'contract', label: '契約締結' }] },
     { key: 'goalDescription', label: 'ゴールの詳細', placeholder: '例：Zoom上でクレジットカード決済まで完了させる' },
   ];

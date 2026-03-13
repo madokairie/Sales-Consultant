@@ -29,6 +29,9 @@ export interface ConsultationConfig {
   commonObjections: string;
   // 成約条件
   closingConditions: string;
+  // 事前教育レベル
+  preEducationLevel: 'full' | 'partial' | 'none';
+  preEducationDetail: string;
   // ゴール
   goalType: 'direct_sale' | 'next_step' | 'contract';
   goalDescription: string;
