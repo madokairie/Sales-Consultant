@@ -48,6 +48,7 @@ export function createProject(name: string): ConsultationProject {
       goalDescription: '',
     },
     script: null,
+    objectionDictionary: null,
     sessions: [],
   };
   const all = getProjects();
@@ -71,4 +72,39 @@ export function deleteProject(id: string): boolean {
   if (filtered.length === all.length) return false;
   saveProjects(filtered);
   return true;
+}
+
+export function exportAllData(): string {
+  const projects = getProjects();
+  const exportData = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    projects,
+  };
+  return JSON.stringify(exportData, null, 2);
+}
+
+export function importAllData(jsonString: string): { added: number; updated: number } {
+  const data = JSON.parse(jsonString);
+  const imported: ConsultationProject[] = data.projects || data;
+  if (!Array.isArray(imported)) throw new Error('無効なデータ形式です');
+
+  const existing = getProjects();
+  let added = 0;
+  let updated = 0;
+
+  for (const project of imported) {
+    if (!project.id || !project.name) continue;
+    const idx = existing.findIndex(p => p.id === project.id);
+    if (idx >= 0) {
+      existing[idx] = { ...existing[idx], ...project };
+      updated++;
+    } else {
+      existing.push(project);
+      added++;
+    }
+  }
+
+  saveProjects(existing);
+  return { added, updated };
 }

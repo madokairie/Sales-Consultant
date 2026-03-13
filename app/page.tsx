@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { listProjects, createProject, deleteProject } from './lib/store';
+import { listProjects, createProject, deleteProject, exportAllData, importAllData } from './lib/store';
 import { ConsultationProject } from './lib/types';
 
 type CreateMode = 'script' | 'sessions' | null;
@@ -28,10 +28,40 @@ export default function Home() {
     setNewName('');
   };
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const handleDelete = (id: string, name: string) => {
     if (!confirm(`「${name}」を削除しますか？`)) return;
     deleteProject(id);
     setProjects(listProjects());
+  };
+
+  const handleExport = () => {
+    const json = exportAllData();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sales-consultant-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const result = importAllData(reader.result as string);
+        setProjects(listProjects());
+        alert(`インポート完了: ${result.added}件追加、${result.updated}件更新`);
+      } catch (err) {
+        alert(`インポートに失敗しました: ${err instanceof Error ? err.message : '不明なエラー'}`);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   return (
@@ -46,6 +76,36 @@ export default function Home() {
             <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
               個別相談スクリプト設計 ＆ 商談分析AI
             </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push('/manual')}
+              className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors hover:opacity-80 flex items-center gap-1"
+              style={{ background: '#FEF3C7', color: '#B45309' }}
+            >
+              📖 使い方
+            </button>
+            <button
+              onClick={handleExport}
+              className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors hover:opacity-80 flex items-center gap-1"
+              style={{ background: '#F0F4FF', color: 'var(--primary)' }}
+            >
+              バックアップ
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors hover:opacity-80 flex items-center gap-1"
+              style={{ background: '#F0FDF4', color: '#059669' }}
+            >
+              復元
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleImport}
+              className="hidden"
+            />
           </div>
         </div>
       </header>
@@ -141,46 +201,70 @@ export default function Home() {
                 >
                   <div className="flex-1 min-w-0" onClick={() => router.push(`/projects/${p.id}`)}>
                     <h3 className="font-bold text-sm truncate" style={{ color: 'var(--primary)' }}>{p.name}</h3>
-                    <div className="flex items-center gap-3 mt-1.5">
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                       {p.config.productName && (
                         <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
                           {p.config.productName}
                         </span>
                       )}
-                      <span className="text-xs" style={{ color: 'var(--muted)' }}>
-                        {p.script ? 'スクリプト作成済み' : '未作成'}
-                      </span>
-                      <span className="text-xs" style={{ color: 'var(--muted)' }}>
-                        商談記録: {p.sessions.length}件
-                      </span>
+                      {p.script && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">
+                          📝 スクリプト済
+                        </span>
+                      )}
+                      {p.sessions.length > 0 && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-600">
+                          📊 分析 {p.sessions.length}件
+                          {p.sessions.filter(s => s.feedback).length > 0 && (
+                            <>（{(() => {
+                              const analyzed = p.sessions.filter(s => s.feedback);
+                              const avgScore = Math.round(analyzed.reduce((sum, s) => sum + (s.feedback?.overallScore || 0), 0) / analyzed.length);
+                              return `平均${avgScore}点`;
+                            })()}）</>
+                          )}
+                        </span>
+                      )}
+                      {p.sessions.length > 0 && (
+                        <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                          {(() => {
+                            const closed = p.sessions.filter(s => s.result === 'closed').length;
+                            const total = p.sessions.length;
+                            return `成約 ${closed}/${total}件`;
+                          })()}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 ml-4">
                     <button
                       onClick={() => router.push(`/projects/${p.id}?tab=config`)}
-                      className="text-xs px-2.5 py-1.5 rounded-lg transition-colors hover:opacity-80"
-                      style={{ background: `var(--primary)15`, color: 'var(--primary)' }}
-                      title="設定"
+                      className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors hover:opacity-80 flex items-center gap-1"
+                      style={{ background: '#F0F4FF', color: 'var(--primary)' }}
                     >
-                      ⚙️
+                      <span className="text-sm">⚙️</span> 設定
                     </button>
                     <button
                       onClick={() => router.push(`/projects/${p.id}?tab=script`)}
-                      className="text-xs px-2.5 py-1.5 rounded-lg transition-colors hover:opacity-80"
-                      style={{ background: `var(--primary)15`, color: 'var(--primary)' }}
-                      title="スクリプト"
+                      className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors hover:opacity-80 flex items-center gap-1"
+                      style={{ background: '#EFF6FF', color: '#2563EB' }}
                     >
-                      📝
+                      <span className="text-sm">📝</span> スクリプト
+                    </button>
+                    <button
+                      onClick={() => router.push(`/projects/${p.id}?tab=objections`)}
+                      className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors hover:opacity-80 flex items-center gap-1"
+                      style={{ background: '#FEF3C7', color: '#B45309' }}
+                    >
+                      <span className="text-sm">🛡️</span> 反論辞典
                     </button>
                     <button
                       onClick={() => router.push(`/projects/${p.id}?tab=sessions`)}
-                      className="text-xs px-2.5 py-1.5 rounded-lg transition-colors hover:opacity-80"
-                      style={{ background: `var(--accent)15`, color: 'var(--accent)' }}
-                      title="商談分析"
+                      className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors hover:opacity-80 flex items-center gap-1"
+                      style={{ background: '#F5F3FF', color: '#7C3AED' }}
                     >
-                      📊
+                      <span className="text-sm">📊</span> 分析
                     </button>
-                    <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                    <span className="text-xs ml-1" style={{ color: 'var(--muted)' }}>
                       {new Date(p.updatedAt).toLocaleDateString('ja-JP')}
                     </span>
                     <button

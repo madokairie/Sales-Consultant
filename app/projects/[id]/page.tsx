@@ -8,11 +8,37 @@ import {
   ConsultationConfig,
   ConsultationSession,
   SessionFeedback,
+  ObjectionDictionary,
+  ObjectionEntry,
   PHASE_META,
   PhaseType,
 } from '../../lib/types';
 
-type Tab = 'config' | 'script' | 'sessions';
+type Tab = 'config' | 'script' | 'objections' | 'sessions';
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className="text-[10px] px-2 py-1 rounded-md transition-all flex-shrink-0 hover:opacity-80"
+      style={{
+        background: copied ? '#D1FAE5' : '#F3F4F6',
+        color: copied ? '#059669' : '#9CA3AF',
+      }}
+      title="コピー"
+    >
+      {copied ? '✓ コピー済' : 'コピー'}
+    </button>
+  );
+}
 
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   return (
@@ -34,6 +60,8 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
   const [configMode, setConfigMode] = useState<'fields' | 'text'>('fields');
   const [bulkText, setBulkText] = useState('');
   const [parsingBulk, setParsingBulk] = useState(false);
+  const [generatingObjections, setGeneratingObjections] = useState(false);
+  const [objectionFilter, setObjectionFilter] = useState<string | null>(null);
 
   // Session form
   const [showSessionForm, setShowSessionForm] = useState(false);
@@ -195,6 +223,27 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
     }
   };
 
+  // ===== Generate objection dictionary =====
+  const handleGenerateObjections = async () => {
+    setGeneratingObjections(true);
+    try {
+      const res = await fetch('/api/generate-objections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: project.config }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      const updated = updateProject(id, { objectionDictionary: data as ObjectionDictionary });
+      if (updated) setProject(updated);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '反論辞典の生成に失敗しました');
+      console.error(e);
+    } finally {
+      setGeneratingObjections(false);
+    }
+  };
+
   // ===== Delete session =====
   const handleDeleteSession = (sessionId: string) => {
     if (!confirm('この商談記録を削除しますか？')) return;
@@ -230,6 +279,7 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
   const TABS: { key: Tab; label: string; icon: string }[] = [
     { key: 'config', label: '設定', icon: '⚙️' },
     { key: 'script', label: 'スクリプト', icon: '📝' },
+    { key: 'objections', label: '反論辞典', icon: '🛡️' },
     { key: 'sessions', label: '商談記録', icon: '📊' },
   ];
 
@@ -423,6 +473,13 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
                   </div>
                   <div className="flex items-center gap-2">
                     <button
+                      onClick={() => router.push(`/projects/${id}/guide`)}
+                      className="px-4 py-2 text-xs font-medium rounded-lg text-white transition-all hover:opacity-90"
+                      style={{ background: '#10b981' }}
+                    >
+                      🎯 面談カンペ
+                    </button>
+                    <button
                       onClick={() => window.open(`/projects/${id}/print?mode=script`, '_blank')}
                       className="px-4 py-2 text-xs font-medium rounded-lg border transition-all hover:opacity-80"
                       style={{ borderColor: 'var(--border)', color: 'var(--primary)' }}
@@ -501,8 +558,13 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
                                 <h4 className="text-sm font-bold mb-2" style={{ color: 'var(--primary)' }}>{step.title}</h4>
 
                                 {/* Talk script */}
-                                <div className="text-sm leading-relaxed mb-3 whitespace-pre-wrap" style={{ color: 'var(--foreground)' }}>
-                                  {step.talkScript}
+                                <div className="relative group">
+                                  <div className="text-sm leading-relaxed mb-3 whitespace-pre-wrap pr-16" style={{ color: 'var(--foreground)' }}>
+                                    {step.talkScript}
+                                  </div>
+                                  <div className="absolute top-0 right-0">
+                                    <CopyButton text={step.talkScript} />
+                                  </div>
                                 </div>
 
                                 {/* Meta info */}
@@ -510,9 +572,12 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
                                   {step.keyQuestion && (
                                     <div className="flex items-start gap-2 p-2.5 rounded-lg" style={{ background: '#E8F4FD' }}>
                                       <span className="text-xs">❓</span>
-                                      <div>
+                                      <div className="flex-1">
                                         <span className="text-[10px] font-medium" style={{ color: '#2980B9' }}>キー質問</span>
-                                        <p className="text-xs mt-0.5">{step.keyQuestion}</p>
+                                        <div className="flex items-start gap-2 mt-0.5">
+                                          <p className="text-xs flex-1">{step.keyQuestion}</p>
+                                          <CopyButton text={step.keyQuestion} />
+                                        </div>
                                       </div>
                                     </div>
                                   )}
@@ -552,6 +617,209 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ===== OBJECTIONS TAB ===== */}
+        {activeTab === 'objections' && (
+          <div className="max-w-3xl mx-auto">
+            {!project.objectionDictionary ? (
+              <div className="text-center py-16">
+                <div className="text-4xl mb-3">🛡️</div>
+                <h3 className="text-sm font-bold mb-2" style={{ color: 'var(--primary)' }}>
+                  反論切り返し辞典を作りましょう
+                </h3>
+                <p className="text-xs mb-2" style={{ color: 'var(--muted)' }}>
+                  商品情報をもとに、よくある断り文句への切り返しフレーズをAIが生成
+                </p>
+                <p className="text-xs mb-5" style={{ color: 'var(--muted)' }}>
+                  面談中にパッと引ける「押さない・追わない」原則のフレーズ集
+                </p>
+                <button
+                  onClick={handleGenerateObjections}
+                  disabled={generatingObjections}
+                  className="px-5 py-2.5 text-sm font-medium text-white rounded-lg transition-all hover:opacity-90 disabled:opacity-50"
+                  style={{ background: 'var(--primary)' }}
+                >
+                  {generatingObjections ? '生成中...' : '🛡️ 反論辞典を生成'}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <h2 className="text-base font-bold" style={{ color: 'var(--primary)' }}>反論切り返し辞典</h2>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
+                      「押さない・追わない」原則に基づく切り返しフレーズ集
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => window.open(`/projects/${id}/print?mode=objections`, '_blank')}
+                      className="px-4 py-2 text-xs font-medium rounded-lg border transition-all hover:opacity-80"
+                      style={{ borderColor: 'var(--border)', color: 'var(--primary)' }}
+                    >
+                      PDF保存
+                    </button>
+                    <button
+                      onClick={handleGenerateObjections}
+                      disabled={generatingObjections}
+                      className="px-4 py-2 text-xs font-medium text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+                      style={{ background: 'var(--accent)' }}
+                    >
+                      {generatingObjections ? '生成中...' : '🔄 再生成'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Principles */}
+                {project.objectionDictionary.principles.length > 0 && (
+                  <div className="p-4 rounded-xl border" style={{ borderColor: 'var(--border)', background: '#F0F7FF' }}>
+                    <h3 className="text-xs font-bold mb-2" style={{ color: 'var(--primary)' }}>基本原則</h3>
+                    <div className="space-y-1">
+                      {project.objectionDictionary.principles.map((p, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <span className="text-xs mt-0.5">▶</span>
+                          <p className="text-xs">{p}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Category filter */}
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => setObjectionFilter(null)}
+                    className="px-3 py-1.5 text-xs rounded-full font-medium transition-all"
+                    style={{
+                      background: objectionFilter === null ? 'var(--primary)' : '#f0f0f0',
+                      color: objectionFilter === null ? '#fff' : 'var(--muted)',
+                    }}
+                  >
+                    すべて
+                  </button>
+                  {[...new Set(project.objectionDictionary.objections.map(o => o.category))].map(cat => {
+                    const entry = project.objectionDictionary!.objections.find(o => o.category === cat);
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => setObjectionFilter(objectionFilter === cat ? null : cat)}
+                        className="px-3 py-1.5 text-xs rounded-full font-medium transition-all"
+                        style={{
+                          background: objectionFilter === cat ? 'var(--primary)' : '#f0f0f0',
+                          color: objectionFilter === cat ? '#fff' : 'var(--muted)',
+                        }}
+                      >
+                        {entry?.categoryIcon} {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Objection cards */}
+                <div className="space-y-4">
+                  {project.objectionDictionary.objections
+                    .filter(o => !objectionFilter || o.category === objectionFilter)
+                    .map((obj: ObjectionEntry) => (
+                    <div
+                      key={obj.id}
+                      className="border rounded-xl overflow-hidden"
+                      style={{ borderColor: 'var(--border)', background: 'var(--card)' }}
+                    >
+                      {/* Objection header */}
+                      <div className="px-5 py-3 flex items-center justify-between" style={{ background: '#FFF5F5', borderBottom: '1px solid var(--border)' }}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{obj.categoryIcon}</span>
+                          <div>
+                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: '#FFE4E4', color: '#DC2626' }}>
+                              {obj.category}
+                            </span>
+                            <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                              obj.severity === 'high' ? 'bg-red-100 text-red-600'
+                              : obj.severity === 'medium' ? 'bg-orange-100 text-orange-600'
+                              : 'bg-yellow-100 text-yellow-600'
+                            }`}>
+                              {obj.severity === 'high' ? '頻出' : obj.severity === 'medium' ? '時々' : 'まれ'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="px-5 py-4 space-y-3">
+                        {/* The objection itself */}
+                        <div className="p-3 rounded-lg" style={{ background: '#FFF0F0' }}>
+                          <p className="text-sm font-bold" style={{ color: '#991B1B' }}>
+                            「{obj.objection}」
+                          </p>
+                        </div>
+
+                        {/* Psychology */}
+                        <div className="p-3 rounded-lg" style={{ background: '#F0F4FF' }}>
+                          <p className="text-[10px] font-bold mb-1" style={{ color: '#1E40AF' }}>本当の心理</p>
+                          <p className="text-xs" style={{ color: '#1E3A5F' }}>{obj.psychology}</p>
+                        </div>
+
+                        {/* Response scripts */}
+                        <div>
+                          <p className="text-[10px] font-bold mb-2" style={{ color: 'var(--primary)' }}>切り返しフレーズ</p>
+                          <div className="space-y-2">
+                            {obj.responses.map((resp, ri) => (
+                              <div key={ri} className="p-3 rounded-lg border" style={{ borderColor: '#E5E7EB', background: '#FAFFFE' }}>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ background: '#E0F2FE', color: '#0369A1' }}>
+                                    {resp.situation}
+                                  </span>
+                                  <span className="text-[10px]" style={{ color: 'var(--muted)' }}>
+                                    トーン: {resp.tone === 'empathetic' ? '共感的' : resp.tone === 'curious' ? '興味深そうに' : '落ち着いて'}
+                                  </span>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <p className="text-sm whitespace-pre-wrap flex-1" style={{ color: '#065F46' }}>
+                                    {resp.script}
+                                  </p>
+                                  <CopyButton text={resp.script} />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* NG Phrases */}
+                        {obj.ngPhrases && obj.ngPhrases.length > 0 && (
+                          <div className="p-3 rounded-lg" style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}>
+                            <p className="text-[10px] font-bold mb-2" style={{ color: '#DC2626' }}>NGフレーズ（絶対に言わない）</p>
+                            <div className="space-y-2">
+                              {obj.ngPhrases.map((ng, ni) => (
+                                <div key={ni} className="flex items-start gap-2">
+                                  <span className="text-xs mt-0.5 flex-shrink-0" style={{ color: '#DC2626' }}>✕</span>
+                                  <div>
+                                    <p className="text-xs font-bold" style={{ color: '#991B1B' }}>{ng.phrase}</p>
+                                    <p className="text-[10px] mt-0.5" style={{ color: '#B91C1C' }}>{ng.reason}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Do NOT */}
+                        <div className="p-3 rounded-lg" style={{ background: '#FFF5F5' }}>
+                          <p className="text-[10px] font-bold mb-1" style={{ color: '#DC2626' }}>やってはいけない行動</p>
+                          <p className="text-xs" style={{ color: '#991B1B' }}>{obj.doNot}</p>
+                        </div>
+
+                        {/* Follow up */}
+                        <div className="p-3 rounded-lg" style={{ background: '#F0FDF4' }}>
+                          <p className="text-[10px] font-bold mb-1" style={{ color: '#16A34A' }}>その後の質問</p>
+                          <p className="text-xs" style={{ color: '#166534' }}>{obj.followUp}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -860,7 +1128,10 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
                                   {item.timestamp && <p className="text-[10px] text-orange-400 mt-1">「{item.timestamp}」</p>}
                                   {item.actionScript && (
                                     <div className="mt-2 p-2.5 rounded-lg border" style={{ background: '#FFF', borderColor: '#FBBF24' }}>
-                                      <p className="text-[10px] font-bold mb-1" style={{ color: '#92400E' }}>次回使えるセリフ例</p>
+                                      <div className="flex items-center justify-between mb-1">
+                                        <p className="text-[10px] font-bold" style={{ color: '#92400E' }}>次回使えるセリフ例</p>
+                                        <CopyButton text={item.actionScript} />
+                                      </div>
                                       <p className="text-xs whitespace-pre-wrap" style={{ color: '#78350F' }}>
                                         {item.actionScript}
                                       </p>
@@ -884,7 +1155,10 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
                                   {item.timestamp && <p className="text-[10px] text-purple-400 mt-1">「{item.timestamp}」</p>}
                                   {item.actionScript && (
                                     <div className="mt-2 p-2.5 rounded-lg border" style={{ background: '#FFF', borderColor: '#C084FC' }}>
-                                      <p className="text-[10px] font-bold mb-1" style={{ color: '#6B21A8' }}>こう言えばよかった</p>
+                                      <div className="flex items-center justify-between mb-1">
+                                        <p className="text-[10px] font-bold" style={{ color: '#6B21A8' }}>こう言えばよかった</p>
+                                        <CopyButton text={item.actionScript} />
+                                      </div>
                                       <p className="text-xs whitespace-pre-wrap" style={{ color: '#581C87' }}>
                                         {item.actionScript}
                                       </p>

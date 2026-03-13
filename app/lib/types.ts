@@ -8,6 +8,8 @@ export interface ConsultationProject {
   config: ConsultationConfig;
   // スクリプト
   script: ConsultationScript | null;
+  // 反論切り返し辞典
+  objectionDictionary: ObjectionDictionary | null;
   // 商談記録
   sessions: ConsultationSession[];
 }
@@ -122,4 +124,35 @@ export interface PhaseAnalysis {
   score: number;
   comment: string;
   suggestion: string;
+}
+
+// ===== 反論切り返し辞典 =====
+export interface ObjectionDictionary {
+  generatedAt: string;
+  objections: ObjectionEntry[];
+  principles: string[];
+}
+
+export interface ObjectionEntry {
+  id: string;
+  category: string;
+  categoryIcon: string;
+  objection: string;
+  psychology: string;
+  responses: ObjectionResponse[];
+  ngPhrases: NgPhrase[];
+  doNot: string;
+  followUp: string;
+  severity: 'high' | 'medium' | 'low';
+}
+
+export interface NgPhrase {
+  phrase: string;
+  reason: string;
+}
+
+export interface ObjectionResponse {
+  situation: string;
+  script: string;
+  tone: string;
 }

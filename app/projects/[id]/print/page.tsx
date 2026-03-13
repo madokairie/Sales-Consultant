@@ -3,7 +3,7 @@
 import { useEffect, useState, use, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getProject } from '../../../lib/store';
-import { ConsultationProject, PHASE_META, PhaseType } from '../../../lib/types';
+import { ConsultationProject, PHASE_META, PhaseType, ObjectionEntry } from '../../../lib/types';
 
 export default function PrintPage({ params }: { params: Promise<{ id: string }> }) {
   return (
@@ -16,7 +16,7 @@ export default function PrintPage({ params }: { params: Promise<{ id: string }> 
 function PrintPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const searchParams = useSearchParams();
-  const mode = searchParams.get('mode') as 'script' | 'analysis';
+  const mode = searchParams.get('mode') as 'script' | 'analysis' | 'objections';
   const sessionId = searchParams.get('session');
   const [project, setProject] = useState<ConsultationProject | null>(null);
 
@@ -43,6 +43,10 @@ function PrintPageInner({ params }: { params: Promise<{ id: string }> }) {
 
   if (mode === 'script' && project.script) {
     return <ScriptPDF project={project} />;
+  }
+
+  if (mode === 'objections' && project.objectionDictionary) {
+    return <ObjectionsPDF project={project} />;
   }
 
   return <div className="p-10 text-center">データが見つかりません</div>;
@@ -313,6 +317,148 @@ function AnalysisPDF({ project, session }: { project: ConsultationProject; sessi
 }
 
 // ===== Print Styles =====
+// ===== Objections PDF =====
+function ObjectionsPDF({ project }: { project: ConsultationProject }) {
+  const dict = project.objectionDictionary!;
+  const categories = [...new Set(dict.objections.map(o => o.category))];
+
+  return (
+    <div className="print-page">
+      <style>{printStyles}</style>
+
+      {/* Cover */}
+      <div className="cover-page" style={{ background: 'linear-gradient(135deg, #7B2D26 0%, #A0522D 50%, #B8860B 100%)' }}>
+        <div className="cover-accent" style={{ background: 'linear-gradient(90deg, #DC2626, #F59E0B, #10B981)' }} />
+        <div className="cover-content">
+          <p className="cover-label">反論切り返し辞典</p>
+          <h1 className="cover-title">{project.config.productName || project.name}</h1>
+          <div className="cover-meta">
+            <p style={{ fontSize: '16px', marginBottom: '12px', opacity: 0.9 }}>
+              「押さない・追わない」原則に基づく<br />切り返しフレーズ集
+            </p>
+            {project.config.targetAudience && (
+              <p>対象: {project.config.targetAudience}</p>
+            )}
+            <p>反論パターン: {dict.objections.length}件</p>
+            <p>作成日: {new Date(dict.generatedAt).toLocaleDateString('ja-JP')}</p>
+          </div>
+        </div>
+        <div className="cover-footer">
+          <p>Confidential — {project.name}</p>
+        </div>
+      </div>
+
+      {/* Principles page */}
+      {dict.principles.length > 0 && (
+        <div className="page">
+          <h2 className="section-title" style={{ borderColor: '#B8860B', color: '#7B2D26' }}>基本原則</h2>
+          <div style={{ marginBottom: '24px' }}>
+            {dict.principles.map((p, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '16px', padding: '12px 16px', background: '#FFF8F0', borderRadius: '8px', borderLeft: '4px solid #B8860B' }}>
+                <span style={{ fontSize: '16px', fontWeight: 700, color: '#B8860B', flexShrink: 0 }}>{i + 1}.</span>
+                <p style={{ margin: 0, fontSize: '13px', lineHeight: 1.7, color: '#333' }}>{p}</p>
+              </div>
+            ))}
+          </div>
+
+          <h2 className="section-title" style={{ borderColor: '#7B2D26', color: '#7B2D26', marginTop: '30px' }}>カテゴリ一覧</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            {categories.map(cat => {
+              const entries = dict.objections.filter(o => o.category === cat);
+              const icon = entries[0]?.categoryIcon || '📌';
+              return (
+                <div key={cat} style={{ padding: '14px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', background: '#FAFAF8' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '18px' }}>{icon}</span>
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: '#2C3E50' }}>{cat}</span>
+                    <span style={{ fontSize: '11px', color: '#95A5A6', marginLeft: 'auto' }}>{entries.length}パターン</span>
+                  </div>
+                  <div>
+                    {entries.map((e, ei) => (
+                      <p key={ei} style={{ margin: '2px 0', fontSize: '11px', color: '#666' }}>• 「{e.objection}」</p>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Objection detail pages */}
+      {dict.objections.map((obj: ObjectionEntry, idx: number) => (
+        <div key={obj.id} className="page" style={{ pageBreakBefore: idx === 0 ? 'auto' : 'always' }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', paddingBottom: '12px', borderBottom: '3px solid #DC2626' }}>
+            <span style={{ fontSize: '28px' }}>{obj.categoryIcon}</span>
+            <div>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: '#DC2626', letterSpacing: '1px' }}>{obj.category}</span>
+              <span style={{ fontSize: '10px', marginLeft: '8px', padding: '2px 8px', borderRadius: '4px', background: obj.severity === 'high' ? '#FEE2E2' : obj.severity === 'medium' ? '#FFF7ED' : '#FEF9C3', color: obj.severity === 'high' ? '#DC2626' : obj.severity === 'medium' ? '#EA580C' : '#CA8A04' }}>
+                {obj.severity === 'high' ? '頻出' : obj.severity === 'medium' ? '時々' : 'まれ'}
+              </span>
+            </div>
+          </div>
+
+          {/* The objection */}
+          <div style={{ padding: '14px 18px', background: '#FEF2F2', borderRadius: '8px', marginBottom: '16px', borderLeft: '4px solid #DC2626' }}>
+            <p style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#991B1B' }}>「{obj.objection}」</p>
+          </div>
+
+          {/* Psychology */}
+          <div style={{ padding: '12px 16px', background: '#EFF6FF', borderRadius: '8px', marginBottom: '16px' }}>
+            <p style={{ margin: '0 0 4px 0', fontSize: '10px', fontWeight: 700, color: '#1E40AF' }}>本当の心理</p>
+            <p style={{ margin: 0, fontSize: '12px', lineHeight: 1.7, color: '#1E3A5F' }}>{obj.psychology}</p>
+          </div>
+
+          {/* Response scripts */}
+          <div style={{ marginBottom: '16px' }}>
+            <p style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 700, color: '#2C3E50' }}>切り返しフレーズ</p>
+            {obj.responses.map((resp, ri) => (
+              <div key={ri} style={{ padding: '12px 16px', borderRadius: '8px', border: '1px solid #D1FAE5', background: '#F0FDF4', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: '#DBEAFE', color: '#1D4ED8', fontWeight: 600 }}>{resp.situation}</span>
+                  <span style={{ fontSize: '10px', color: '#9CA3AF' }}>
+                    トーン: {resp.tone === 'empathetic' ? '共感的' : resp.tone === 'curious' ? '興味深そうに' : '落ち着いて'}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '12px', lineHeight: 1.8, color: '#065F46', whiteSpace: 'pre-wrap' }}>{resp.script}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* NG Phrases */}
+          {obj.ngPhrases && obj.ngPhrases.length > 0 && (
+            <div style={{ padding: '12px 16px', background: '#FEF2F2', borderRadius: '8px', marginBottom: '12px', border: '1px solid #FECACA' }}>
+              <p style={{ margin: '0 0 8px 0', fontSize: '11px', fontWeight: 700, color: '#DC2626' }}>NGフレーズ（絶対に言わない）</p>
+              {obj.ngPhrases.map((ng, ni) => (
+                <div key={ni} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '6px' }}>
+                  <span style={{ color: '#DC2626', fontWeight: 700, fontSize: '12px', flexShrink: 0 }}>✕</span>
+                  <div>
+                    <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, color: '#991B1B' }}>{ng.phrase}</p>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '10px', color: '#B91C1C' }}>{ng.reason}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Do NOT + Follow up */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <div style={{ padding: '10px 14px', background: '#FFF5F5', borderRadius: '8px' }}>
+              <p style={{ margin: '0 0 4px 0', fontSize: '10px', fontWeight: 700, color: '#DC2626' }}>やってはいけない行動</p>
+              <p style={{ margin: 0, fontSize: '11px', lineHeight: 1.6, color: '#991B1B' }}>{obj.doNot}</p>
+            </div>
+            <div style={{ padding: '10px 14px', background: '#F0FDF4', borderRadius: '8px' }}>
+              <p style={{ margin: '0 0 4px 0', fontSize: '10px', fontWeight: 700, color: '#16A34A' }}>フォローアップ質問</p>
+              <p style={{ margin: 0, fontSize: '11px', lineHeight: 1.6, color: '#166534' }}>{obj.followUp}</p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const printStyles = `
   @page {
     size: A4;
