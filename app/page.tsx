@@ -101,7 +101,7 @@ export default function Home() {
               スクリプト設計
             </h2>
             <p className="text-xs leading-relaxed mb-3" style={{ color: 'var(--muted)' }}>
-              商品情報を入力するだけで、ゆきこ式メソッドに基づいた成約率80-90%の相談スクリプトを自動生成
+              商品情報を入力するだけで、成約率80-90%の相談スクリプトを自動生成
             </p>
             <span className="text-xs font-medium px-3 py-1.5 rounded-full transition-all group-hover:opacity-90"
               style={{ background: 'var(--primary)', color: '#fff' }}>

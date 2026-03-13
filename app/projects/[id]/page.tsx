@@ -547,7 +547,7 @@ function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
                   商談を分析しましょう
                 </h3>
                 <p className="text-xs mb-2" style={{ color: 'var(--muted)' }}>
-                  商談の文字起こしを入力すると、ゆきこ式メソッドに基づいてAIが分析
+                  商談の文字起こしを入力すると、高成約メソッドに基づいてAIが分析
                 </p>
                 <p className="text-xs mb-5" style={{ color: 'var(--muted)' }}>
                   「導く面談」度合い・失敗パターン検出・決断確認ポイント評価など
