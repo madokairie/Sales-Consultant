@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, use, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { getProject, updateProject } from '../../lib/store';
 import {
   ConsultationProject,
@@ -15,10 +15,20 @@ import {
 type Tab = 'config' | 'script' | 'sessions';
 
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
+  return (
+    <Suspense fallback={null}>
+      <ProjectPageInner params={params} />
+    </Suspense>
+  );
+}
+
+function ProjectPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialTab = (searchParams.get('tab') as Tab) || 'config';
   const [project, setProject] = useState<ConsultationProject | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>('config');
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [generating, setGenerating] = useState(false);
   const [analyzing, setAnalyzing] = useState<string | null>(null);
 
@@ -254,16 +264,33 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             {!project.script ? (
               <div className="text-center py-16">
                 <div className="text-4xl mb-3">📝</div>
-                <p className="text-sm mb-4" style={{ color: 'var(--muted)' }}>
-                  設定タブで商品情報を入力し、スクリプトを生成してください
+                <h3 className="text-sm font-bold mb-2" style={{ color: 'var(--primary)' }}>
+                  スクリプトを生成しましょう
+                </h3>
+                <p className="text-xs mb-5" style={{ color: 'var(--muted)' }}>
+                  {project.config.productName
+                    ? `「${project.config.productName}」のスクリプトを生成できます`
+                    : '商品情報を設定してからスクリプトを生成してください'}
                 </p>
-                <button
-                  onClick={() => setActiveTab('config')}
-                  className="px-4 py-2 text-sm border rounded-lg"
-                  style={{ borderColor: 'var(--border)' }}
-                >
-                  設定へ移動
-                </button>
+                <div className="flex items-center justify-center gap-3">
+                  {project.config.productName ? (
+                    <button
+                      onClick={handleGenerateScript}
+                      disabled={generating}
+                      className="px-5 py-2.5 text-sm font-medium text-white rounded-lg transition-all hover:opacity-90 disabled:opacity-50"
+                      style={{ background: 'var(--accent)' }}
+                    >
+                      {generating ? '生成中...' : '📝 スクリプト生成'}
+                    </button>
+                  ) : null}
+                  <button
+                    onClick={() => setActiveTab('config')}
+                    className="px-4 py-2 text-sm border rounded-lg"
+                    style={{ borderColor: 'var(--border)' }}
+                  >
+                    ⚙️ 商品情報を設定
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="space-y-4">
@@ -494,19 +521,43 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             )}
 
             {/* Sessions list */}
+            {/* Config hint for analysis accuracy */}
+            {!project.config.productName && (
+              <div className="flex items-center gap-3 p-3 mb-4 rounded-lg border" style={{ borderColor: 'var(--warning)', background: '#FFF8E1' }}>
+                <span className="text-sm">💡</span>
+                <div className="flex-1">
+                  <p className="text-xs" style={{ color: '#795548' }}>
+                    商品情報を設定すると、分析の精度が向上します
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTab('config')}
+                  className="text-xs px-3 py-1.5 rounded-lg font-medium whitespace-nowrap"
+                  style={{ background: 'var(--warning)', color: '#fff' }}
+                >
+                  設定する
+                </button>
+              </div>
+            )}
+
             {project.sessions.length === 0 && !showSessionForm ? (
               <div className="text-center py-16">
                 <div className="text-4xl mb-3">📊</div>
-                <p className="text-sm mb-2" style={{ color: 'var(--muted)' }}>商談記録がありません</p>
-                <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>
-                  商談の文字起こしを入力すると、AIが分析してフィードバックを提供します
+                <h3 className="text-sm font-bold mb-2" style={{ color: 'var(--primary)' }}>
+                  商談を分析しましょう
+                </h3>
+                <p className="text-xs mb-2" style={{ color: 'var(--muted)' }}>
+                  商談の文字起こしを入力すると、ゆきこ式メソッドに基づいてAIが分析
+                </p>
+                <p className="text-xs mb-5" style={{ color: 'var(--muted)' }}>
+                  「導く面談」度合い・失敗パターン検出・決断確認ポイント評価など
                 </p>
                 <button
                   onClick={() => setShowSessionForm(true)}
-                  className="px-4 py-2 text-sm font-medium text-white rounded-lg"
-                  style={{ background: 'var(--primary)' }}
+                  className="px-5 py-2.5 text-sm font-medium text-white rounded-lg transition-all hover:opacity-90"
+                  style={{ background: 'var(--accent)' }}
                 >
-                  最初の商談を記録
+                  📊 商談を分析する
                 </button>
               </div>
             ) : (
